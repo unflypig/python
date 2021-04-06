@@ -52,7 +52,7 @@ while True:
             data = conn.recv(1024)
             LOG.logger.info("recieve from client:[%s]" %data)
             #HEAD,001,866834043101265,143807010421,VIN:DAFULA1ELECTR0N1C,GPS:,STAT:AAAA5,FUEL:FF;FF;FF;FF;FF,ENGINE:FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF,OTHER:FF;FF;FF;FF;FF;FF;FF;FF;FF;FF,MD5:4882C9BA781348AB53FD56CC10BC7BE5,FOOT#
-            ack_data = data.split(",")[3]
+            ack_data = data.decode().split(",")[3]
             conn.send(ack_data)
         except:
             LOG.logger.info("fail")
