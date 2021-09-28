@@ -1,0 +1,173 @@
+###########################################################
+#!/usr/bin/python
+#-*- coding:utf-8 -*-
+#Copyright (C) 2020 Geniatech Ltd. All rights reserved.
+#File Name: remote_cmd.py
+#Author: zhangtao
+#Mail: zhangtao@geniatech.com
+#Created Time: 2021-03-30 12:09:06
+###########################################################
+#import log
+import socket
+import sys
+import time
+import thread
+import os
+import glVal
+
+upload_config_dir = {}
+TABLE_NAME = "TBOX_DATA"
+DATABASE_WRITE_ENABLE = True
+tcp_socket = False
+SERVER_CONN = False
+#LOG = log.Logger(config.LOG_FILE_PATH,level=config.LOG_LEVEL)
+#LOG = log.Logger("/tmp/test.log","debug")
+#log = LOG.logger
+print('remote cmd application start up')
+def send_cmd(s):
+    while True:
+        rmt_cmd = input("============Please input remote command, end with enter:================")
+        rmt_cmd = rmt_cmd.encode('utf-8')
+        print("============get command:[%s]===========" %rmt_cmd)
+        if(len(rmt_cmd) > 5):
+            s.send(rmt_cmd)
+        time.sleep(1)
+        #s.send("I AM A CMD")
+        #time.sleep(1.5)
+def strToHex(data):
+    HexData = ""
+    for byte in data:
+        HexByte = "%x" %ord(byte)
+        HexByte = str(HexByte)
+        if(len(HexByte) < 2):
+            HexByte = "0" + HexByte
+        HexData = HexData + "0x" + HexByte
+    return HexData
+
+def tcpClientRecv(clientSock, serverSock):
+    while True:
+        if glVal.clientSock:
+            try:
+                data = glVal.clientSock.recv(2048)
+            except:
+                log.error("recv error")
+                glVal.clientSock.close()
+                glVal.clientSock = False
+            else:
+                #data = data.decode()
+                print("recv form printer data[%s]" %strToHex(data))
+                print("Transmit to pos machine")
+                glVal.serverSock.send(data)
+                print("Transmit to pos success")
+        else:
+            tcpClitSockBuild()
+def tcpServerRecv(clientSock, serverSock):
+    while True:
+        if glVal.serverSock:
+            try:
+                data = glVal.serverSock.recv(2048)
+                if(len(data) < 1):
+                    glVal.serverSock.close()
+                    tcpSverSockBuild()
+                    continue
+            except:
+                log.error("recv error")
+                glVal.serverSock.close()
+                glVal.serverSock = False
+            else:
+                #data = data.decode()
+                print("recv form pos machine data[%s]" %strToHex(data))
+                print("Transmit to printer")
+                glVal.clientSock.send(data)
+                print("Transmit to printer success")
+        else:
+            tcpSverSockBuild()
+            
+def tcpSverSockBuild():
+    while True:
+
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            server.bind((glVal.serverDomain, glVal.serverPort))
+        except:
+            print("bind to %s fail, retry..." %glVal.serverPort)
+            time.sleep(2)
+            continue
+        try:
+            server.listen(5)
+        except:
+            print("listen to %s fail, retry..." %glVal.serverPort)
+            time.sleep(2)
+            continue
+        print("tcp server listen on port:%s success,start to wait connect..." %glVal.serverPort)
+        glVal.serverSock, addr = server.accept()
+        print("client:%s connected in %d port" %(addr[0], addr[1]))
+        return glVal.serverSock
+
+def tcpClitSockBuild():
+    host = "10.168.4.144"
+    port = 9100
+    #Attempt connection to server
+    while True:
+        try:
+            glVal.clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            glVal.clientSock.connect((host, port))
+        except:
+            print("Could not make a connection to the server")
+        else:
+            print("Make a connection to the server success")
+            return glVal.clientSock
+
+
+while True:
+    #glVal.serverDomain = "192.168.30.232"
+    '''
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        server.bind((glVal.serverDomain, glVal.serverPort))
+    except:
+        print("bind to %s fail, retry..." %glVal.serverPort)
+        time.sleep(0.01)
+        continue
+    try:
+        server.listen(5)
+    except:
+        print("listen to %s fail, retry..." %glVal.serverPort)
+        time.sleep(0.01)
+        continue
+    print("tcp server listen on port:%s success,start to wait connect..." %glVal.serverPort)
+    conn, addr = server.accept()
+    print("client:%s connected in %d port" %(addr[0], addr[1]))
+    #_thread.start_new_thread(send_cmd, (conn,))
+    clientSock = tcpClitSockBuild()
+    '''
+    thread.start_new_thread(tcpServerRecv, (glVal.clientSock, glVal.serverSock))
+    thread.start_new_thread(tcpClientRecv, (glVal.clientSock, glVal.serverSock))
+    while True:
+        time.sleep(1)
+    while True:
+        try:
+            data = conn.recv(1024)
+            data = data.decode()
+            data_str = strToHex(data)
+            print("recieve from pos machine:[%s]" %data_str)
+
+            #conn.send(data)
+            clientSock.send(data)
+            print("Transmit data form pos machine to printer success")
+
+            print("Wait printer response...")
+            dataFromPrinter = clientSock.recv(1024)
+            dataFromPrinter = dataFromPrinter.decode()
+            print("Get printer response[%s], transmit it to pos..." %strToHex(dataFromPrinter))
+
+            conn.send(dataFromPrinter)
+            print("Transmit data form printer to pos machine success")
+            #HEAD,001,866834043101265,143807010421,VIN:DAFULA1ELECTR0N1C,GPS:,STAT:AAAA5,FUEL:FF;FF;FF;FF;FF,ENGINE:FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF;FF,OTHER:FF;FF;FF;FF;FF;FF;FF;FF;FF;FF,MD5:4882C9BA781348AB53FD56CC10BC7BE5,FOOT#
+        except:
+            print("fail")
+            conn.close()
+            conn, addr = server.accept()
+            print("client:%s connected in %d port" %(addr[0], addr[1]))
+
